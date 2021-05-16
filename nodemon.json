@@ -1,0 +1,8 @@
+{
+  "env": {
+    "PORT": 8000,
+    "DB_PASS": "cloves123",
+    "DB_NAME": "auth-db",
+    "JWT_KEY": "secret"
+  }
+}

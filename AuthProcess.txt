@@ -1,0 +1,176 @@
+$ For Understating the Auth Process.. There are the few concepts we need to know about..
+
+#1. Verification of User credentials with our DataBase.
+#2. Checking weather the user is verified or not using:
+    + JWT (JSON WEB TOKENS)
+    + COOKIES or SESSION
+
+? Cookies:
+  Store data in a user's browser.
+  Now what exactly happens is the
+  - When user request for login on our server.
+  - We check the credentials is available in our data base or not.
+  - If it is not available then we just return an error user not registered or invalid credentials.
+  - But if it is available then we make a JWT token which contains a unique token for the user and also contains signature of the the user.
+  - Now this JWT token is sent to the user browser in the form of cookie or session with response.
+  - Now if user sent request on our server for our protected routes then we will check that in the request weather the cookies or session is present or not.
+  - If cookies/session is present then we will verify the JWT token present in the cookie with the JWT token we have send to the user.
+  - If it verified then we will allow the user to access our protected route.
+  - If cookies/session is not present then we will redirect user to login page to enter their credentials again.
+
+NOTE: if you are creating a website with state changing end points for authenticated user where the data could change then you will learn about CSRF attacks and use strategies for protection. https://owasp.org/www-community/attacks/csrf
+
+? How to use Cookie..
+  For testing cookies let us create two dummy routes
+  //@ Cookies Routes:
+  app.get("/set-cookie", (req, res) => {
+    res.setHeader("Set-Cookie", "newUser=true");
+    res.send("Cookie Set Successfully");
+  });
+
+  app.get("/read-cookie", (req, res) => {});
+
+  @GET /set-cookie
+   In this we will send the browser cookies from our server in response.
+   there are two ways to do this..
+   +1. Is to send the cookies header with the response and then browser will automatically fetch cookies from that response header.
+       > res.setHeader('Set-Cookie',"name=value");
+       > res.send("Cookie Set");
+
+    +2. Is to use third party package to parse the cookie which cookie-parser.
+        > npm i cookie-parser
+        > const cookieParser = require('cookie-parser') 
+        Use this function  as middleware for the express app so that it can parse it.
+        > app.use(cookieParser())
+        Now to send the cookies to the client side we simple use cookie()
+        > res.cookie("name",value) 
+        // if cookie is already there with same name then it will just update the value otherwise create a new cookie with that name.
+        > res.send("Cookie Set")
+
+        - cookie() this function provided by the cookieParser() middleware.
+          Here we can provide three param.
+          One is for the name of the cookie.
+          Second is for the value of the cookie.
+          Third is for the options for the cookie like-->
+          {
+              maxAge: 1000 * 60 * 60 * 24 // in ms
+              secure: true, // by this cookie is only send over a secure connection like https
+              httpOnly: true // using this we cannot access the cookie with JS like document.cookie // this should be used for authentication so that cookies cannot be accessed at the frontend.
+          }
+
+  @GET /read-cookie
+   once cookie is send to the browser then at every request from that browser the cookie is send automatically hence at any endpoints we can access cookie using the req.cookie method
+   > const cookies= req.cookies;
+   > res.json(cookies)
+
+? JWT: 
+  EveryTime when user sent login request to our server with their credentials.
+  Then we we first check the creds in the database if it is there then
+  We create JSON WEB TOKENS using the JWT package.
+  + JWT TOKEN contains the encoded information about the verified user.
+  This JWT is send to the client machine using cookie and as long as they cookie exist the JWT token the user treat as authenticated.
+
+  Now Remember the browser send this cookie along with the request on every endpoints.
+  And as these cookie contains our JWT we can verify these JWT and if it is verify then we allow user to access those endpoints which he/she requested for.
+
+? What is CSRF Attacks and State-Changing endpoints.
+  CSRF stands for Cross-Sire-Request-Forgery Attack.  
+  It basically means a malicious site can take a user's authentication cookie and then make requests to our server posting as that user now if our server exposing state changing endpoints then this is a security risk because that malicious site can manipulate user data and potentially access more of it.
+
+  + State-Changing endpoints means the endpoints where we change the existing data of the database like updating the user details.
+
+  Now In our case there is no state changing endpoints so there are no security risk
+
+  read for more info: https://stackoverflow.com/questions/58157580/do-i-need-csrf-protection-for-login-endpoint
+
+? You DO need CSRF protection any time BOTH of the following are true:
+  + the browser is automatically providing the authentication mechanism (most common way this is done is with a cookie)
+  + the operation is state-changing on your backend
+
+? JWT Verification:
+  Below is the JWT Token:
+  eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c
+
+  > In its compact form, JSON Web Tokens consist of three parts separated by dots (.), which are:
+    - Header (Tells the server what type of signature is being used, metaData)
+    - Payload (Used to identify the user ex. contains user id)
+    - Signature (Makes the token secure, like a stamp of authenticity)
+  
+  > Header: meta data about the token, The header typically consists of two parts: the type of the token, which is JWT, and the signing algorithm being used, such as HMAC SHA256 or RSA.
+  {
+    "alg": "HS256",
+    "typ": "JWT"
+  }
+
+  > Payload: The second part of the token is the payload, which contains the claims. Claims are statements about an entity (typically, the user) and additional data. There are three types of claims: registered, public, and private claims.
+  
+    - Registered claims: These are a set of predefined claims which are not mandatory but recommended, to provide a set of useful, interoperable claims. Some of them are: iss (issuer), exp (expiration time), sub (subject), aud (audience), and others.
+
+    - Public claims: These can be defined at will by those using JWTs. But to avoid collisions they should be defined in the IANA JSON Web Token Registry or be defined as a URI that contains a collision resistant namespace.
+
+    - Private claims: These are the custom claims created to share information between parties that agree on using them and are neither registered or public claims.
+  {
+    "sub": "1234567890",
+    "name": "John Doe",
+    "admin": true
+  }
+
+  > Signature: To create the signature part you have to take the encoded header, the encoded payload, a secret, the algorithm specified in the header, and sign that.
+    HMACSHA256(
+    base64UrlEncode(header) + "." +
+    base64UrlEncode(payload),
+    secret)
+  - The signature is used to verify the message wasn't changed along the way, and, in the case of tokens signed with a private key, it can also verify that the sender of the JWT is who it says it is.
+
+  > Putting all together
+  The output is three Base64-URL strings separated by dots that can be easily passed in HTML and HTTP environments, while being more compact when compared to XML-based standards such as SAML.
+
+? How do JSON Web Tokens work?
+  + In authentication, when the user successfully logs in using their credentials, a JSON Web Token will be returned. Since tokens are credentials, great care must be taken to prevent security issues. In general, you should not keep tokens longer than required.
+
+  + You also should not store sensitive session data in browser storage due to lack of security.
+
+  + Whenever the user wants to access a protected route or resource, the user agent should send the JWT, typically in the Authorization header using the Bearer schema. The content of the header should look like the following:
+  Authorization: Bearer <token>
+
+  + This can be, in certain cases, a stateless authorization mechanism. The server's protected routes will check for a valid JWT in the Authorization header, and if it's present, the user will be allowed to access protected resources.
+
+  + If the JWT contains the necessary data, the need to query the database for certain operations may be reduced, though this may not always be the case.
+
+  + If the token is sent in the Authorization header, Cross-Origin Resource Sharing (CORS) won't be an issue as it doesn't use cookies.
+
+? How we will verify the user JWT.
+  As on every request we will get the cookie inside which our token is present, now at the server we look the header and the payload of the token and hash them with the secret key and see that weather it is equal to signature which is stored on the server, if the jwt had been tampered on the client then it will not verify with the jwt present on the server.
+  you don't need to manually hashed the header and payload with the secret key and then make the signature using algo.
+  We can simply take help of jwt package and inbuilt methods of that package.
+
+
+? Protecting Routes:
+  Suppose someone knows the url of my product page 
+  @ /smoothies
+  Then he can simply type in the url box and can access my product page without even registering or login on my website.
+  Hence I have to protect that route so that user cannot directly access it.
+  Let's see how i will do it..
+  As we know that at every request to our end-points browser send the cookie with the request object.
+  So now we will access that cookie, grab the JWT present inside it and then verify that token if the token is verified then only we allow user to access that end points otherwise redirect it to login, so that they get authenticate.
+
+  Now to checkAuth at the endpoints i want to protect i simply made a middleware and then install that middleware on the routes which i want to protect..
+
+? CheckIng Current User: 
+  This is the to display the current logged in user in the views.
+  So how can we do this.
+  Well let's see what we have after a user login,
+  + OH remember, we have a JWT token in the cookie, also this jwt token contain the information about the user which is user id.
+  + Now I have to check the current user and then display the user info on the views hence i need to use it as middleware.
+  + Yaa That's cool i will make a middleware and then place it before the route where i want to change the views.
+  + Now What we will do in this middleware,
+    - well we just simply access the cookie and inside it check the payload of JWT where the user id is kept,
+    - USing this user id i will search it for in the DB and then return the found data to the views using res.locals.user
+    - Now In the views i will simple access that user variable which contains info and check if it is present i will display the user info and if it is not present that means jwt token is not present that means user is not logged in in this case there is no need to display user info.
+
+? Conditional Rendering
+  Have u notice that in the header all 3btn and 1 user info is showing no matter weather the user is logged in or not.
+  Now just think is it a good practice to show the login and signup btn to the user even if it is  logged in.
+  Or Showing the logout and welcome user message to the user who is not logged in.
+  + So what we have to is that we will check if user detail is present that means user is logged in and in this case we will only display logout and welcome user message to the user, not login and signup btn.
+  + And if user object is null that means the user is not logged in and in this case we will only display login and signup btn and not the logout and welcome user message to the user.
